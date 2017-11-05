@@ -69,10 +69,10 @@ For example:
 ```clojure
 (defn get-parent-item [item]
    (tramp-> item
-            (:parent-id)
-            (core/prepare-db-get-request)
+            :parent-id
+            core/prepare-db-get-request
             !(effect/db-get-request)
-            (:item)))
+            :item))
 ```
 
 We could test it like:
@@ -86,3 +86,18 @@ We could test it like:
          result (step {:item {:id "PARENT"}})]
       (is (= {:id "PARENT"} result))))
 ```
+
+## More features
+
+Here is a fuller example of some features
+
+```clojure
+(tramp-> x
+         inc          ; takes a function
+         (inc)        ; or a form
+         (+ 1)        ; thread first
+         (+ 1 %)      ; or wherever you want it
+         (guard odd?) ; short-circuit with nil unless condition holds
+         (return 2)   ; short-circuit the thread with a value
+         ! (effect % other args)) ; of course jump functions 
+                                  ; also allow multiple paramters

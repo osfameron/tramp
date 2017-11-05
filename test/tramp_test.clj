@@ -47,11 +47,22 @@
     (testing "Each successive evaluation is trampolined"
       (is (= "3" ((((f))))))
       (is (= "3" (trampoline f)))))
-  (comment
-    ; TODO
-    (testing "Handles extra args in jump function"
-      (is (= "foo2" (trampoline
-                      (tramp-> 1 inc ! (str "foo"))))))))
+  (testing "Handles extra args in jump function"
+    (is (= "2foo" (trampoline (tramp-> 1 inc ! (str "foo")))))
+    (is (= "foo2" (trampoline (tramp-> 1 inc ! (str "foo" %))))))
+  (testing "sub tramp->"
+    ; TODO macro to make this nicer
+    ; TODO should return in a subthread be propagated?
+    (let [f (fn [i] (tramp-> i
+                             inc
+                             (#(if (odd? %)
+                                 (reduced :odd) 
+                                 (tramp-> %
+                                          inc
+                                          inc)))
+                             str))]
+      (is (= :odd (f 0)))
+      (is (= "4" (f 1))))))
 
 (deftest test-return
   (is (= :return (tramp-> 1

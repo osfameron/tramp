@@ -44,10 +44,6 @@
     (seq? form) (seq->template form)
     :default (throw (Error. "Invalid form: " form))))
 
-(defn resolve-args [args arg]
-  (let [[a b] (split-on %? args false)] 
-    (concat a [arg] b)))
-
 (defn template->function [[f & args]]
   (if (seq args)
     (let [[a b] (split-on %? args false)] 
@@ -65,9 +61,10 @@
         pure (map form->function a)
         jumped (when (seq b)
                  (let [[b & bs] b
-                       [f args] (form->template b)]
+                       [f & args] (form->template b)
+                       [a b] (split-on %? args false)] 
                    `((fn [arg#]
-                       (let [args# (resolve-args ~args arg#) 
+                       (let [args# (concat [~@a] [arg#] [~@b])
                              next-fn# (fn [~'next-arg] ~(tramp->* 'next-arg bs))]
                          (jump ~f args# next-fn#))))))] 
     `(reduce ~step ~v [~@(concat pure jumped)])))
