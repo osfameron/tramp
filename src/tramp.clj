@@ -87,3 +87,10 @@
 
 (defn return [_ v]
   (reduced v))
+
+;; e.g. (guard odd?) in a thread is equivalent to:
+;;      (#(if (odd? %) % (reduced nil)))
+(defn guard [v pred]
+  (if (pred v)
+    v
+    (reduced nil)))

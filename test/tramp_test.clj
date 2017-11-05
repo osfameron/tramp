@@ -32,7 +32,10 @@
   (testing "tramp-> with non-form function"
     (is (= 2 (tramp-> 1 inc))))
   (testing "tramp-> with single form function"
-    (is (= 2 (tramp-> 1 (inc)))))
+    (is (= 2 (tramp-> 1 (inc))))
+    (is (= 2 (tramp-> 1 (inc %))))
+    (is (= [1 2] (tramp-> 1 (vector % 2))))
+    (is (= [1 2] (tramp-> 2 (vector 1 %)))))
   (let [t (tramp-> 1 (inc) !(inc) (str))]
     (testing "Result of tramp-> with ! prefix is a jump function"
       (is (fn? t))
@@ -43,10 +46,25 @@
   (let [f (fn [] (tramp-> 1 !(inc) !(inc) !(str)))]
     (testing "Each successive evaluation is trampolined"
       (is (= "3" ((((f))))))
-      (is (= "3" (trampoline f))))))
+      (is (= "3" (trampoline f)))))
+  (comment
+    ; TODO
+    (testing "Handles extra args in jump function"
+      (is (= "foo2" (trampoline
+                      (tramp-> 1 inc ! (str "foo"))))))))
 
 (deftest test-return
   (is (= :return (tramp-> 1
                           inc
                           (return :return)
                           inc))))
+
+(deftest test-guard
+  (is (= 3 (tramp-> 1
+                    (guard odd?) 
+                    inc
+                    inc)))
+  (is (= nil (tramp-> 1
+                    inc
+                    (guard odd?)
+                    inc))))
