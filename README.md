@@ -6,6 +6,8 @@ reaches a form prefixed by `!`
 First define a function with `tramp->`
 
 ```clojure
+(require '[tramp :refer [tramp->]])
+
 (defn myfunc [i]
    (tramp-> i
             (inc)
