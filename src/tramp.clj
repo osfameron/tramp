@@ -20,28 +20,57 @@
                    (apply f args))))
     {:fn f :args args :next-fn next-fn})) 
 
-(defmacro jump' [arg f args next-fn]
-  `(jump ~f [~@(cons arg args)] ~next-fn))
+(defn split-on 
+  "Splits around the item matching the predicate.
+  Takes 3rd arg for whether to include the matching item"
+  [p coll inclusive?]
+  (let [[a [_ & b-exc :as b-inc]] (split-with (complement p) coll)]
+    [a (if inclusive? b-inc b-exc)]))
 
-(defn split-exclusive 
-  "Like split-with, but removes the item matching the predicate"
-  [p coll]
-  (let [[a [_ & b]] (split-with p coll)]
-    [a b]))
+(def %? (partial = '%))
+(def !? (partial = '!))
+
+(defn seq->template [[f & args]]
+  (if (seq? args)
+    (let [[a b] (split-on %? args true)] 
+      (if (seq b)
+        (concat [f] a b)
+        (concat [f '%] a)))
+    [f]))
+
+(defn form->template [form]
+  (cond
+    (ifn? form) [form]
+    (seq? form) (seq->template form)
+    :default (throw (Error. "Invalid form: " form))))
+
+(defn resolve-args [args arg]
+  (let [[a b] (split-on %? args false)] 
+    (concat a [arg] b)))
+
+(defn template->function [[f & args]]
+  (if (seq args)
+    (let [[a b] (split-on %? args false)] 
+      `(fn [~'arg] (apply ~f (concat [~@a] [~'arg] [~@b]))))
+    f))
+
+(def form->function (comp template->function form->template))
+
+(defn step [v f] (f v))
 
 (defn tramp->* 
   "function backend to tramp-> macro"
   [v forms]
-  (let [[a b] (split-exclusive #(not= '! %) forms)
-        pure `(-> ~v
-                  ~@a)
+  (let [[a b] (split-on !? forms false)
+        pure (map form->function a)
         jumped (when (seq b)
-                 (let [[[f & args] & bs] b
-                       v (gensym)]
-                   `((jump' ~f
-                           ~args
-                           (fn [~v] ~(tramp->* v bs))))))]
-    (concat pure jumped)))
+                 (let [[b & bs] b
+                       [f args] (form->template b)]
+                   `((fn [arg#]
+                       (let [args# (resolve-args ~args arg#) 
+                             next-fn# (fn [~'next-arg] ~(tramp->* 'next-arg bs))]
+                         (jump ~f args# next-fn#))))))] 
+    `(reduce ~step ~v [~@(concat pure jumped)])))
 
 (defmacro tramp-> 
   "Threading macro like `->`
@@ -53,4 +82,8 @@
   You can call a tramp-> thread using `trampoline`:
     (trampoline (tramp-> 1 !(inc) !(inc) !(inc))) => 3"
   [v & forms]
-  (tramp->* v forms))
+  (let [result (tramp->* v forms)]
+    result))
+
+(defn return [_ v]
+  (reduced v))
