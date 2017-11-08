@@ -22,50 +22,67 @@
     {:fn f :args args :next-fn next-fn})) 
 
 (defn split-on 
-  "Splits around the item matching the predicate.
-  Takes 3rd arg for whether to include the matching item"
-  [p coll inclusive?]
-  (let [[a [_ & b-exc :as b-inc]] (split-with (complement p) coll)]
-    [a (if inclusive? b-inc b-exc)]))
+  "Splits around the item matching the predicate, exclusive."
+  [p coll]
+  (let [[a [_ & b]] (split-with (complement p) coll)]
+    [a b]))
 
 (def %? #{'%})
 (def !? #{'!})
 
-(defn seq->template [[f & args]]
+(defn seq->template
+  "Given a sequence of (f & args) inserts a % in the first position if
+  none is already present.
+    e.g.
+      (seq->template '(f 1))   => '(f % 1)
+      (seq->template '(f % 1)) => '(f % 1)
+      (seq->template '(f 1 %)) => '(f 1 %)"
+  [[f & args]]
   (if (seq? args)
-    (let [[a b] (split-on %? args true)] 
-      (if (seq b)
-        (concat [f] a b)
-        (concat [f '%] a)))
+    (if (some %? args)
+      (cons f args)
+      (concat [f '%] args))
     [f]))
 
-(defn form->template [form]
+(defn form->template
+  "Given a form, returns a template of function and args, with the %
+  in the location to be threaded.  The case of [f %] is returned as [f]"
+  [form]
   (if (seq? form)
     (seq->template form)
     [form]))
 
 (defn template->function [[f & args]]
+  "Given a template, return a function which will accept
+  an arg in the correct place (delimited by %)"
   (if (seq args)
-    (let [[a b] (split-on %? args false)] 
-      `(fn [~'arg] (~f ~@a ~'arg ~@b)))
+    (let [[a b] (split-on %? args)] 
+      `(fn [~'arg]
+         (~f ~@a ~'arg ~@b)))
     f))
 
-(def form->function (comp template->function form->template))
+(defn form->function [form]
+  (-> form
+      form->template
+      template->function))
+
+(defn -step [v f] (f v))
 
 (defn tramp->* 
   "function backend to tramp-> macro"
   [v forms]
-  (let [[a b] (split-on !? forms false)
+  (let [[a b] (split-on !? forms)
         pure (map form->function a)
         jumped (when (seq b)
                  (let [[b & bs] b
                        [f & args] (form->template b)
-                       [a b] (split-on %? args false)] 
+                       [a b] (split-on %? args)] 
                    `((fn [arg#]
-                       (let [args# (concat [~@a] [arg#] [~@b])
-                             next-fn# (fn [~'next-arg] ~(tramp->* 'next-arg bs))]
+                       (let [args# [~@a arg# ~@b]
+                             next-fn# (fn [~'next-arg]
+                                        ~(tramp->* 'next-arg bs))]
                          (jump ~f args# next-fn#))))))] 
-    `(reduce (comp eval reverse list)  ~v [~@(concat pure jumped)])))
+    `(reduce -step ~v [~@(concat pure jumped)])))
 
 (defmacro tramp-> 
   "Threading macro like `->`
@@ -80,38 +97,78 @@
   (let [result (tramp->* v forms)]
     result))
 
-(defn return [_ v]
+(defn return
+  "Return a value immediately, exiting the thread."
+  [_ v]
   (reduced v))
 
-;; e.g. (guard odd?) in a thread is equivalent to:
-;;      (#(if (odd? %) % (reduced nil)))
-(defn guard [v pred]
+(defn guard
+  "Function for use in a tramp-> thread.
+  Takes a predicate, and asserts that it is true.
+  Otherwise returns nil or the supplied `ret` value."
+  [v pred & [ret]]
   (if (pred v)
     v
-    (reduced nil)))
+    (reduced ret)))
 
-(defmacro is-result [a expected]
-  `(test/is (= ~expected ~a)))
-
-(defn step! [a & args]
+(defn step! 
+  "Calls the jump function.
+  Passes any arguments onwards.
+  The jump function can take a single optional argument, which acts as an override:
+    e.g. that value will be passed on instead of calling the jump function."
+  [a & args]
   (apply a args))
 
-(defmacro is-fn [a f]
+(defmacro is-result [a expected]
+  "Macro for use inside a test thread.  
+  Tests with `is =` that the thread has completed
+  and the result is correct."
+  `(test/is (= ~expected ~a)))
+
+(defmacro is-fn
+  "Macro for use inside a test thread.  
+  Tests with `is =` that the function to be
+  passed to the jump function is as expected"
+  [a f]
   `(do
      (test/is (= ~f (:fn (meta ~a))))
      ~a))
 
-(defmacro is-args [a args]
+(defmacro is-args 
+  "Macro for use inside a test thread.  
+  Tests with `is =` that the args to be
+  passed to the jump function are as
+  expected.  These will include the current
+  value of the thread, threaded into the
+  appropriate position."
+  [a args]
   `(do
      (test/is (= [~@args] (:args (meta ~a))))
      ~a))
 
-(defmacro is-arg [a arg]
+(defmacro is-value
+  "Macro for use inside a test thread.  
+  Tests with `is =` that the specified
+  value is the current value in the thread
+  before calling the jump function."
+  [a v]
   `(do
-     (test/is (= [~arg] (:args (meta ~a))))
+     (test/is (= ~v (first (:args (meta ~a)))))
      ~a))
 
-(defmacro if-> [a p t & [f]]
+(defmacro if->
+  "Macro for use inside tramp-> thread.
+   Takes:
+    the threaded value `a`
+    predicate `p`
+    true branch `t`
+    optional false branch `f`.
+   If the predicate holds, then a new `tramp->`
+   branch is run on the true branch.
+
+   Else the false branch is run if present,
+   otherwise the threaded value is returned unchanged."
+  [a p t & [f]]
   `(#(if (~p ~a)
        (tramp-> ~a ~@t)
        (tramp-> ~a ~@f))))

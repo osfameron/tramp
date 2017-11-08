@@ -93,9 +93,10 @@
     (testing "Basic tests"
       (-> t
           (is-fn inc)
-          (is-arg 1)
+          (is-value 1)
           (step!)
           (is-fn +)
+          (is-value 2)
           (is-args [2 3])
           (step!)
           (is-result 6)))
