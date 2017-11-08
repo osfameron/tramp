@@ -47,10 +47,12 @@ You can also `return` a thread early with:
 ```clojure
 (tramp-> num
          inc
-         (return 5)
-         inc ;; <-- rest of this thread will never be called
+         (return 5) <-- rest of this thread will never be called
+         inc
          inc)
 ```
+
+This might be useful for debugging, or in conjunction with `if->`:
 
 ## If
 
@@ -58,6 +60,8 @@ The `if->` macro takes a predicate, a true branch and an optional
 false branch.  These branches are themselves `tramp->` threads.
 
 If no false branch is provided, the value is passed through unchanged.
+If you wanted the else branch to return nil, you might look at `guard`
+or at `return`'ing a value.
 
 ```clojure
 (tramp-> i
@@ -68,10 +72,18 @@ If no false branch is provided, the value is passed through unchanged.
              (dec)))
          (str "The answer is: " %))
 
-; always return an even number
+; always return an even number.
 (tramp-> i
          (if-> odd?
             (inc)))
+
+; return out of the outer thread
+(tramp-> i
+         (if-> odd?
+            ((inc)
+             (* 2))
+            (return nil)
+         (str "The answer is: " %))
 ```
 
 ## Break on `!`

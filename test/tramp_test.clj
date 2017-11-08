@@ -62,11 +62,11 @@
   (testing "two way"
     (let [f (fn [i] (tramp-> i
                              (if-> odd?
-                               ((return :odd)) ; NB: only returns from inner scope
+                               ((return :odd))
                                ((inc)
                                 (inc)))
                              str))]
-      (is (= ":odd" (f 1)))
+      (is (= :odd (f 1)))
       (is (= "4" (f 2))))))
 
 (deftest test-return

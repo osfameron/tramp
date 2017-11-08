@@ -68,6 +68,12 @@
 
 (defn -step [v f] (f v))
 
+(comment
+  (defn tramp! [f & args]
+    (if (fn? f)
+      (reduce apply f (cons args (repeat [])))
+      f)))
+
 (defn tramp->* 
   "function backend to tramp-> macro"
   [v forms]
@@ -94,18 +100,28 @@
   You can call a tramp-> thread using `trampoline`:
     (trampoline (tramp-> 1 !(inc) !(inc) !(inc))) => 3"
   [v & forms]
-  (let [result (tramp->* v forms)]
-    result))
+  `(do
+     (defonce ~'tramp-nesting 0)
+     (let [~'tramp-nesting (inc ~'tramp-nesting)]
+       ~(tramp->* v forms))))
 
-(defn return
+(defn return* [nesting v]
+  (eval 
+    (reduce (comp reverse list)
+            (cons v (repeat nesting reduced)))))
+
+(defmacro return
   "Return a value immediately, exiting the thread."
   [_ v]
-  (reduced v))
+  `(return* ~'tramp-nesting ~v))
 
 (defn guard
   "Function for use in a tramp-> thread.
   Takes a predicate, and asserts that it is true.
-  Otherwise returns nil or the supplied `ret` value."
+  Otherwise returns nil or the supplied `ret` value.
+  
+  Unlike `return`, will only return out of the current
+  level of thread."
   [v pred & [ret]]
   (if (pred v)
     v
