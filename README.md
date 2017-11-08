@@ -136,7 +136,7 @@ You can also override the value your function should have returned:
 ;; "10"
 ```
 
-## Why?
+### Why?
 
 This makes it possible to test functions that mix pure (core) logic and
 effectful (shell) interactions without mocking.
