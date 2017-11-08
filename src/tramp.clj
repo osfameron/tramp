@@ -1,4 +1,5 @@
 (ns tramp
+  (:require [clojure.test :as test])
   (:gen-class))
 
 (defn jump 
@@ -27,8 +28,8 @@
   (let [[a [_ & b-exc :as b-inc]] (split-with (complement p) coll)]
     [a (if inclusive? b-inc b-exc)]))
 
-(def %? (partial = '%))
-(def !? (partial = '!))
+(def %? #{'%})
+(def !? #{'!})
 
 (defn seq->template [[f & args]]
   (if (seq? args)
@@ -39,20 +40,17 @@
     [f]))
 
 (defn form->template [form]
-  (cond
-    (ifn? form) [form]
-    (seq? form) (seq->template form)
-    :default (throw (Error. "Invalid form: " form))))
+  (if (seq? form)
+    (seq->template form)
+    [form]))
 
 (defn template->function [[f & args]]
   (if (seq args)
     (let [[a b] (split-on %? args false)] 
-      `(fn [~'arg] (apply ~f (concat [~@a] [~'arg] [~@b]))))
+      `(fn [~'arg] (~f ~@a ~'arg ~@b)))
     f))
 
 (def form->function (comp template->function form->template))
-
-(defn step [v f] (f v))
 
 (defn tramp->* 
   "function backend to tramp-> macro"
@@ -67,7 +65,7 @@
                        (let [args# (concat [~@a] [arg#] [~@b])
                              next-fn# (fn [~'next-arg] ~(tramp->* 'next-arg bs))]
                          (jump ~f args# next-fn#))))))] 
-    `(reduce ~step ~v [~@(concat pure jumped)])))
+    `(reduce (comp eval reverse list)  ~v [~@(concat pure jumped)])))
 
 (defmacro tramp-> 
   "Threading macro like `->`
@@ -91,3 +89,29 @@
   (if (pred v)
     v
     (reduced nil)))
+
+(defmacro is-result [a expected]
+  `(test/is (= ~expected ~a)))
+
+(defn step! [a & args]
+  (apply a args))
+
+(defmacro is-fn [a f]
+  `(do
+     (test/is (= ~f (:fn (meta ~a))))
+     ~a))
+
+(defmacro is-args [a args]
+  `(do
+     (test/is (= [~@args] (:args (meta ~a))))
+     ~a))
+
+(defmacro is-arg [a arg]
+  `(do
+     (test/is (= [~arg] (:args (meta ~a))))
+     ~a))
+
+(defmacro if-> [a p t & [f]]
+  `(#(if (~p ~a)
+       (tramp-> ~a ~@t)
+       (tramp-> ~a ~@f))))

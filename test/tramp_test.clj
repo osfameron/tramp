@@ -49,20 +49,25 @@
       (is (= "3" (trampoline f)))))
   (testing "Handles extra args in jump function"
     (is (= "2foo" (trampoline (tramp-> 1 inc ! (str "foo")))))
-    (is (= "foo2" (trampoline (tramp-> 1 inc ! (str "foo" %))))))
-  (testing "sub tramp->"
-    ; TODO macro to make this nicer
-    ; TODO should return in a subthread be propagated?
+    (is (= "foo2" (trampoline (tramp-> 1 inc ! (str "foo" %)))))))
+
+(deftest test-if->
+  (testing "one way"
     (let [f (fn [i] (tramp-> i
-                             inc
-                             (#(if (odd? %)
-                                 (reduced :odd) 
-                                 (tramp-> %
-                                          inc
-                                          inc)))
+                             (if-> odd?
+                               (inc))))]
+      (is (= 2 (f 2)))
+      (is (= 2 (f 1)))))
+    
+  (testing "two way"
+    (let [f (fn [i] (tramp-> i
+                             (if-> odd?
+                               ((return :odd)) ; NB: only returns from inner scope
+                               ((inc)
+                                (inc)))
                              str))]
-      (is (= :odd (f 0)))
-      (is (= "4" (f 1))))))
+      (is (= ":odd" (f 1)))
+      (is (= "4" (f 2))))))
 
 (deftest test-return
   (is (= :return (tramp-> 1
@@ -79,3 +84,24 @@
                     inc
                     (guard odd?)
                     inc))))
+
+(deftest test-test-functions
+  (let [t (tramp-> 1
+                   ! inc
+                   ! (+ 3)
+                   inc)]
+    (testing "Basic tests"
+      (-> t
+          (is-fn inc)
+          (is-arg 1)
+          (step!)
+          (is-fn +)
+          (is-args [2 3])
+          (step!)
+          (is-result 6)))
+    (testing "Override step"
+      (-> t
+          (step! 10)
+          (is-args [10 3])
+          (step! 20)
+          (is-result 21)))))
