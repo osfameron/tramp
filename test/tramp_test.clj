@@ -14,17 +14,16 @@
       (is (= "3" (j 3))))))
 
 (deftest test-form->function
-  (testing "single iFN returned as-is"
-    (is (= inc (form->function inc)))
-    (is (= :foo (form->function :foo)))
-    (is (= 2 ((form->function #(inc %)) 1))))
-  (testing "List with function and no arguments returns that function"
-    (is (= inc (form->function (list inc))))
-    (is (= :foo (form->function (list :foo)))))
+  (testing "single function"
+    (is (= 2 ((eval (form->function inc)) 1)))
+    (is (= 2 ((eval (form->function (list inc))) 1)))
+    (is (= 2 ((eval (form->function #(inc %))) 1))))
   (testing "List with function and multiple arguments behaves as ->"
     (is (= [1 2] ((eval (form->function (list vector 2))) 1))))
   (testing "% can be used to change location of argument"
     (is (= [1 2] ((eval (form->function (list vector 1 '%))) 2)))))
+
+(defmacro m-identity [a] a)
 
 (deftest test-tramp->
   (testing "tramp-> with no function"
@@ -49,7 +48,10 @@
       (is (= "3" (trampoline f)))))
   (testing "Handles extra args in jump function"
     (is (= "2foo" (trampoline (tramp-> 1 inc ! (str "foo")))))
-    (is (= "foo2" (trampoline (tramp-> 1 inc ! (str "foo" %)))))))
+    (is (= "foo2" (trampoline (tramp-> 1 inc ! (str "foo" %))))))
+  (testing "Handles macro in pure part"
+    (is (= 2 (tramp-> 1 (m-identity) inc)))
+    (is (= 2 (tramp-> 1 m-identity inc)))))
 
 (deftest test-if->
   (testing "one way"

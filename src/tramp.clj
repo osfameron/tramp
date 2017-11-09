@@ -55,11 +55,9 @@
 (defn template->function [[f & args]]
   "Given a template, return a function which will accept
   an arg in the correct place (delimited by %)"
-  (if (seq args)
-    (let [[a b] (split-on %? args)] 
-      `(fn [~'arg]
-         (~f ~@a ~'arg ~@b)))
-    f))
+  (let [[a b] (split-on %? args)] 
+    `(fn [~'arg]
+       (~f ~@a ~'arg ~@b))))
 
 (defn form->function [form]
   (-> form
