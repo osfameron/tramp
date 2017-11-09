@@ -89,7 +89,7 @@
                              next-fn# (fn [~'next-arg]
                                         ~(tramp->* 'next-arg bs))]
                          (jump ~f args# next-fn#))))))] 
-    `(reduce -step ~v [~@(concat pure jumped)])))
+    `(reduce -step ~v [~@pure ~@jumped])))
 
 (defmacro tramp-> 
   "Threading macro like `->`
