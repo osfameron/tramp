@@ -66,7 +66,6 @@
       form->template
       template->function))
 
-(defn -right [v f] (list f v))
 (defn -step [v f] (f v))
 
 (comment
@@ -106,18 +105,10 @@
      (let [~'tramp-nesting (inc ~'tramp-nesting)]
        ~(tramp->* v forms))))
 
-(defn return* [nesting v]
-  ; can't use -step because a reduced value short-circuits
-  ; the reduce
-  (eval 
-    (reduce -right
-            v
-            (repeat nesting reduced))))
-
 (defmacro return
   "Return a value immediately, exiting the thread."
   [_ v]
-  `(return* ~'tramp-nesting ~v))
+  `(nth (iterate reduced ~v) ~'tramp-nesting))
 
 (defn guard
   "Function for use in a tramp-> thread.
